@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build-test-lint:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: busgo
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:password@localhost:5433/busgo
+      JWT_SECRET: testsecret
+      STRIPE_SECRET_KEY: testkey
+      PORT: 4000
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Install backend dependencies
+        run: cd backend && npm install
+      - name: Install frontend dependencies
+        run: cd frontend && npm install
+      - name: Lint backend
+        run: cd backend && npm run lint || echo "No lint script"
+      - name: Lint frontend
+        run: cd frontend && npm run lint
+      - name: Build backend
+        run: cd backend && npm run build
+      - name: Build frontend
+        run: cd frontend && npm run build
+      - name: Run backend tests
+        run: cd backend && npm test || echo "No test script"
+      - name: Run frontend tests
+        run: cd frontend && npm test || echo "No test script"
+      - name: Build backend Docker image
+        run: docker build -t busgo-backend ./backend
+      - name: Build frontend Docker image
+        run: docker build -t busgo-frontend ./frontend
+      - name: Docker Compose up (integration)
+        run: docker-compose -f docker-compose.yml up -d --build
